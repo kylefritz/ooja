@@ -18,27 +18,22 @@ rescue
   puts "couldn't get tweet"
 end
 
-#playSong 'roxanne'
-last_tweet=""
-while true do
-  sleep 1
-  tweet = get_last_tweet
-  print "."
-  next if tweet == last_tweet
+def run
+  last_tweet=""
+  while true do
+    sleep 1
+    tweet = get_last_tweet
+    print "."
+    next if tweet == last_tweet
 
-  hashtag=/#play/
-  if hashtag =~ tweet
-    search_for=tweet.gsub(hashtag, '')
-    play_song search_for
-  else
-    puts "new tweet, but no hashtag: #{tweet}"
+    hashtag=/#play/
+    if hashtag =~ tweet
+      search_for=tweet.gsub(hashtag, '')
+      play_song search_for
+    else
+      puts "new tweet, but no hashtag: #{tweet}"
+    end
+
+    last_tweet=tweet
   end
-
-  last_tweet=tweet
 end
-
-
-=begin
-TODO
-  * need to use streaming api to get around rate limit
-=end
