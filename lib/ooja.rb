@@ -2,6 +2,7 @@ require 'nokogiri'
 require 'open-uri'
 require 'json'
 require 'oauth'
+require 'yaml'
 
 def play_song(song)
 puts "looking for #{song}"
@@ -14,7 +15,11 @@ end
 
 #Clients may not make more than 150 requests per hour
 def get_last_tweet(access_token)
-  response=access_token.request(:get, "http://api.twitter.com/1/statuses/home_timeline.json")
+    # use the access token as an agent to get the user timeline
+  #response = access_token.request(:get, "https://userstream.twitter.com/2/user.json")
+  #response = access_token.request(:get, "http://api.twitter.com/1/statuses/home_timeline.json")
+
+response=access_token.request(:get, "http://api.twitter.com/1/statuses/home_timeline.json")
   if response.code == "200"
     JSON::parse(response.read_body).first["text"]
   end
@@ -24,28 +29,62 @@ end
 
 def run
 # Exchange your oauth_token and oauth_token_secret for an AccessToken instance.
-  def prepare_access_token(oauth_token, oauth_token_secret)
-      consumer = OAuth::Consumer.new("VG4ZMn117FlHZX4MR4Q", "h9Z9zIEDMEhKD609W4PQCrZG4KSbWYLvkMluSREuMY",
+  def get_access_token()
+      credentials_file="app-credentials.yaml"
+      begin
+        credentials = YAML.load(File.read(credentials_file))
+        puts "found your app (consumer) credentials"
+      rescue
+        puts "get your oauth app (consumer) credentials from twitter"
+        Kernel.sleep 2
+        `open http://twitter.com/oauth_clients`
+        credentials={}
+        print "consumer id: "
+        credentials["consumer_id"]=gets.chomp
+        print "consumer secret: "
+        credentials["consumer_secret"]=gets.chomp
+        File.open credentials_file,'w' do |file|
+          file.write YAML.dump(credentials)
+        end
+      end
+
+      #setup consumer
+      consumer = OAuth::Consumer.new(credentials["consumer_id"],
+                                     credentials["consumer_secret"],
          { :site => "http://api.twitter.com",
            :scheme => :header
          })
-      # now create the access token object from passed values
-      token_hash = { :oauth_token => oauth_token,
-                     :oauth_token_secret => oauth_token_secret
-                   }
-      access_token = OAuth::AccessToken.from_hash(consumer, token_hash )
-      return access_token
+
+      if credentials.has_key? :screen_name
+        puts "cached oauth token for #{credentials[:screen_name]}"
+        access=OAuth::AccessToken.from_hash(consumer, credentials )
+      else
+        #get request token from twitter
+        request=consumer.get_request_token
+
+        #send user to get pin saying it's cool
+        `open #{request.authorize_url}`
+        print "what's your pin? "
+        pin=gets.chomp
+
+        #use pin to authenticate and get access to act as user
+        access=request.get_access_token :oauth_verifier=> pin
+
+        puts "signed in as #{access.params[:screen_name]}"
+
+        #save to file for next time
+        File.open credentials_file,'w' do |file|
+          file.write YAML.dump(credentials.merge(access.params))
+        end
+
+        access
+      end
   end
 
-  # TODO: should make people sign in via twitter
-  # Exchange our oauth_token and oauth_token secret for the AccessToken instance.
-  access_token = prepare_access_token("371208952-EeSa2o01Xg6ZV6Bm3r3GI3rNlpzErZ6ccEzX6xyS", "dDXIIw3V16Pl0GKwba8jdyq3IlqeKA9YSLzI5WpI0g")
-  # use the access token as an agent to get the user timeline
-  #response = access_token.request(:get, "https://userstream.twitter.com/2/user.json")
-  #response = access_token.request(:get, "http://api.twitter.com/1/statuses/home_timeline.json")
+  access_token = get_access_token
 
   last_tweet=""
-  while true do
+  loop do
     sleep 3
     tweet = get_last_tweet access_token
     print "."

@@ -23,7 +23,6 @@ Gem::Specification.new do |s|
 
   #runtime dependencies
   s.add_runtime_dependency 'nokogiri'
-  s.add_runtime_dependency 'open-uri'
   s.add_runtime_dependency  'json'
   s.add_runtime_dependency  'oauth'
 end
