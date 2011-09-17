@@ -3,28 +3,30 @@ require 'open-uri'
 require 'json'
 require 'oauth'
 require 'yaml'
+require 'date'
 
 def play_song(song)
-puts "looking for #{song}"
-xml=Nokogiri::XML(open("https://gdata.youtube.com/feeds/api/videos?q=#{URI.escape(song)}&max-results=1"))
-url = xml.search('feed entry link[rel=alternate]').attr('href').value
-`open #{url}`
+  print "looking for #{song} "
+  xml=Nokogiri::XML(open("https://gdata.youtube.com/feeds/api/videos?q=#{URI.escape(song)}&max-results=1"))
+  url = xml.search('feed entry link[rel=alternate]').attr('href').value
+  `open #{url}`
 rescue
-  puts "sorry dude, couldn't find #{song}"
+  print "sorry dude, couldn't find #{song} "
 end
 
 #Clients may not make more than 150 requests per hour
-def get_last_tweet(access_token)
+def get_last_tweet!(access_token)
     # use the access token as an agent to get the user timeline
   #response = access_token.request(:get, "https://userstream.twitter.com/2/user.json")
   #response = access_token.request(:get, "http://api.twitter.com/1/statuses/home_timeline.json")
 
-response=access_token.request(:get, "http://api.twitter.com/1/statuses/home_timeline.json")
+  response=access_token.request(:get, "http://api.twitter.com/1/statuses/home_timeline.json")
   if response.code == "200"
-    JSON::parse(response.read_body).first["text"]
+    tweet=JSON::parse(response.read_body).first
+    [tweet["text"], DateTime.parse(tweet["created_at"])]
+  else
+    raise "No tweet, error: #{response.code}"
   end
-rescue
-  puts "couldn't get tweet"
 end
 
 def run
@@ -83,21 +85,26 @@ def run
 
   access_token = get_access_token
 
-  last_tweet=""
+  last_tweet_time=DateTime.now
   loop do
     sleep 3
-    tweet = get_last_tweet access_token
-    print "."
-    next if tweet == last_tweet
+    begin
+      tweet,time = get_last_tweet! access_token
+      print "."
+      next if time <= last_tweet_time
 
-    hashtag=/#play/
-    if hashtag =~ tweet
-      search_for=tweet.gsub(hashtag, '')
-      play_song search_for
-    else
-      puts "new tweet, but no hashtag: #{tweet}"
+      hashtag=/#play/
+      if hashtag =~ tweet
+        search_for=tweet.gsub(hashtag, '').gsub(/@\w+/,'').strip
+        play_song search_for
+      else
+        print " new tweet, but no hashtag: #{tweet} "
+      end
+
+      last_tweet_time=time
+    rescue => ex
+      print " couldn't get tweet (#{ex.message})"
+      sleep 3
     end
-
-    last_tweet=tweet
   end
 end
